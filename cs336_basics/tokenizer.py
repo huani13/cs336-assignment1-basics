@@ -91,7 +91,7 @@ class Tokenizer:
         byte_list = []
         for token in ids:
             if token in self.all_special_token_rev_map:
-                byte_llist.append(self.all_special_token_rev_map[token])
+                byte_list.append(self.all_special_token_rev_map[token])
                 continue
             byte_list.append(self.vocab[token])
         return b"".join(byte_list).decode("utf-8", errors="ignore")
@@ -109,14 +109,15 @@ class Tokenizer:
 
         PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
 
-        id_odd = False
+        is_odd = False
 
         for chunk in chunks:
             if is_odd:
                 pretoken_list.append(chunk)
-                special_tokens_index_set.add(len(pretoken_list-1))
+                special_tokens_index_set.add(len(pretoken_list)-1)
             else:
                 pretoken_list.extend(re.findall(PAT, chunk))
+            is_odd = not is_odd
         return pretoken_list, special_tokens_index_set
 
     def _encode_special_token(self, text):
@@ -165,7 +166,7 @@ class Tokenizer:
                 min_map.delete(prev_index)
                 new_byte_pair = (prev_element.value, element.value)
                 if new_byte_pair in self.merges_map:
-                    min_map.put(prev_index, self.merges_map(new_byte_pair))
+                    min_map.put(prev_index, self.merges_map[new_byte_pair])
 
             if next2_index != -1:
                 next2_element = pretoken_byte_rep[next2_index]
@@ -178,7 +179,7 @@ class Tokenizer:
         final_rep = []
         index = 0
         while index != -1:
-            final_rep.append(self.vocab_map[pretoken_byte_rep[index]].value)
-            indenx = pretoken_byte_rep[index].next
+            final_rep.append(self.vocab_map[pretoken_byte_rep[index].value])
+            index = pretoken_byte_rep[index].next
 
         return final_rep
