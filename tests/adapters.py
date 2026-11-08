@@ -14,6 +14,10 @@ from cs336_basics.tokenizer import Tokenizer
 from cs336_basics.linear import Linear
 from cs336_basics.embedding import Embedding
 from cs336_basics.rmsnorm import RMSNorm
+from cs336_basics.feedforward import FeedForward
+from cs336_basics.rope import Rope
+from cs336_basics.softmax import softmax
+from cs336_basics.attention import attention
 
 def run_linear(
     d_in: int,
@@ -91,7 +95,15 @@ def run_swiglu(
     # swiglu.w1.weight.data = w1_weight
     # swiglu.w2.weight.data = w2_weight
     # swiglu.w3.weight.data = w3_weight
-    raise NotImplementedError
+    feedforward = FeedForward(d_model, d_ff)
+    feedforward.load_state_dict(
+        {
+            "w1_weight.weight": w1_weight,
+            "w2_weight.weight": w2_weight,
+            "w3_weight.weight": w3_weight,
+        }
+    )
+    return feedforward(in_features)
 
 
 def run_scaled_dot_product_attention(
@@ -112,7 +124,7 @@ def run_scaled_dot_product_attention(
     Returns:
         Float[Tensor, " ... queries d_v"]: Output of SDPA
     """
-    raise NotImplementedError
+    return attention(Q, K, V, mask)
 
 
 def run_multihead_self_attention(
@@ -208,7 +220,8 @@ def run_rope(
     Returns:
         Float[Tensor, " ... sequence_length d_k"]: Tensor with RoPEd input.
     """
-    raise NotImplementedError
+    rope = Rope(theta, d_k, max_seq_len)
+    return rope(in_query_or_key, token_positions)
 
 
 def run_transformer_block(
@@ -441,7 +454,7 @@ def run_softmax(in_features: Float[Tensor, " ..."], dim: int) -> Float[Tensor, "
         Float[Tensor, "..."]: Tensor of with the same shape as `in_features` with the output of
         softmax normalizing the specified `dim`.
     """
-    raise NotImplementedError
+    return softmax(in_features, dim)
 
 
 def run_cross_entropy(
