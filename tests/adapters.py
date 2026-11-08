@@ -18,6 +18,9 @@ from cs336_basics.feedforward import FeedForward
 from cs336_basics.rope import Rope
 from cs336_basics.softmax import softmax
 from cs336_basics.attention import attention
+from cs336_basics.multiheadattention import MultiHeadAttention
+from cs336_basics.transformerblock import TransformerBlock
+from cs336_basics.transformerlm import TransformerLanguageModel
 
 def run_linear(
     d_in: int,
@@ -158,7 +161,16 @@ def run_multihead_self_attention(
         Float[Tensor, " ... sequence_length d_model"]: Tensor with the output of running your optimized, batched multi-headed attention
         implementation with the given QKV projection weights and input features.
     """
-    raise NotImplementedError
+    mha = MultiHeadAttention(d_model, num_heads)
+    mha.load_state_dict(
+        {
+            "queries.weight": q_proj_weight,
+            "keys.weight": k_proj_weight,
+            "values.weight": v_proj_weight,
+            "proj.weight": o_proj_weight,
+        }
+    )
+    return mha(in_features)
 
 
 def run_multihead_self_attention_with_rope(
@@ -198,7 +210,17 @@ def run_multihead_self_attention_with_rope(
         Float[Tensor, " ... sequence_length d_model"]: Tensor with the output of running your optimized, batched multi-headed attention
         implementation with the given QKV projection weights and input features.
     """
-    raise NotImplementedError
+    rope = Rope(theta, d_model/num_heads, max_seq_len)
+    mha = MultiHeadAttention(d_model, num_heads, rope)
+    mha.load_state_dict(
+        {
+            "queries.weight": q_proj_weight,
+            "keys.weight": k_proj_weight,
+            "values.weight": v_proj_weight,
+            "proj.weight": o_proj_weight,
+        }
+    )
+    return mha(in_features, token_positions)
 
 
 def run_rope(
@@ -294,7 +316,22 @@ def run_transformer_block(
         Float[Tensor, "batch sequence_length d_model"] Tensor with the output of
         running the Transformer block on the input features while using RoPE.
     """
-    raise NotImplementedError
+    rope = Rope(theta, d_model//num_heads, max_seq_len)
+    transformer_block = TransformerBlock(d_model, num_heads, d_ff, rope)
+    transformer_block.load_state_dict(
+        {
+            "multi_head_attention.queries.weight": weights["attn.q_proj.weight"],
+            "multi_head_attention.keys.weight": weights["attn.k_proj.weight"],
+            "multi_head_attention.values.weight": weights["attn.v_proj.weight"],
+            "multi_head_attention.proj.weight": weights["attn.output_proj.weight"],
+            "feedforward.w1_weight.weight": weights["ffn.w1.weight"],
+            "feedforward.w2_weight.weight": weights["ffn.w2.weight"],
+            "feedforward.w3_weight.weight": weights["ffn.w3.weight"],
+            "rms_norm_1.weight": weights["ln1.weight"],
+            "rms_norm_2.weight": weights["ln2.weight"],
+        }
+    )
+    return transformer_block(in_features)
 
 
 def run_transformer_lm(
@@ -376,7 +413,24 @@ def run_transformer_lm(
         Float[Tensor, "batch_size sequence_length vocab_size"]: Tensor with the predicted unnormalized
         next-word distribution for each token.
     """
-    raise NotImplementedError
+    transformer_lm = TransformerLanguageModel(vocab_size, context_length, d_model, num_layers, num_heads, d_ff, rope_theta)
+    weight_dict = {
+        "embedding.weight": weights["token_embeddings.weight"],
+        "final_layer_norm.weight": weights["ln_final.weight"],
+        "output.weight": weights["lm_head.weight"]
+    }
+    for layer in range(num_layers):
+        weight_dict[f"transformer_blocks.{layer}.multi_head_attention.queries.weight"] = weights[f"layers.{layer}.attn.q_proj.weight"]
+        weight_dict[f"transformer_blocks.{layer}.multi_head_attention.keys.weight"] = weights[f"layers.{layer}.attn.k_proj.weight"]
+        weight_dict[f"transformer_blocks.{layer}.multi_head_attention.values.weight"] = weights[f"layers.{layer}.attn.v_proj.weight"]
+        weight_dict[f"transformer_blocks.{layer}.multi_head_attention.proj.weight"] = weights[f"layers.{layer}.attn.output_proj.weight"]
+        weight_dict[f"transformer_blocks.{layer}.feedforward.w1_weight.weight"] = weights[f"layers.{layer}.ffn.w1.weight"]
+        weight_dict[f"transformer_blocks.{layer}.feedforward.w2_weight.weight"] = weights[f"layers.{layer}.ffn.w2.weight"]
+        weight_dict[f"transformer_blocks.{layer}.feedforward.w3_weight.weight"] = weights[f"layers.{layer}.ffn.w3.weight"]
+        weight_dict[f"transformer_blocks.{layer}.rms_norm_1.weight"] = weights[f"layers.{layer}.ln1.weight"]
+        weight_dict[f"transformer_blocks.{layer}.rms_norm_2.weight"] = weights[f"layers.{layer}.ln2.weight"]
+    transformer_lm.load_state_dict(weight_dict)
+    return transformer_lm(in_indices)
 
 
 def run_rmsnorm(
