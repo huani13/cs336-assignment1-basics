@@ -1,6 +1,5 @@
 import regex as re
 import time
-import heapq
 from multiprocessing import Pool
 import os
 from typing import BinaryIO
@@ -12,39 +11,75 @@ class Element:
         self.prev = prev
         self.is_deleted = False
 
-class Rev:
-    def __init__(self, key):
-        self.key = key
-
-    def __lt__(self, other):
-        return self.key > other.key
-
-    def __eq__(self, other):
-        return self.key == other.key
-
 class MaxMap:
     def __init__(self):
         self.d = {}
         self.heap = []
+        self.pos = {}
+
+    def _higher(self, a, b):
+        return (self.d[a], a) > (self.d[b], b)
+
+    def _swap(self, i, j):
+        heap = self.heap
+        heap[i], heap[j] = heap[j], heap[i]
+        self.pos[heap[i]] = i
+        self.pos[heap[j]] = j
+
+    def _sift_up(self, i):
+        while i > 0:
+            parent = (i - 1) // 2
+            if not self._higher(self.heap[i], self.heap[parent]):
+                break
+            self._swap(i, parent)
+            i = parent
+
+    def _sift_down(self, i):
+        n = len(self.heap)
+        while True:
+            best = i
+            left = 2 * i + 1
+            right = left + 1
+            if left < n and self._higher(self.heap[left], self.heap[best]):
+                best = left
+            if right < n and self._higher(self.heap[right], self.heap[best]):
+                best = right
+            if best == i:
+                break
+            self._swap(i, best)
+            i = best
 
     def put(self, key, value):
-        self.d[key] = value
-        heapq.heappush(self.heap, (-value, Rev(key)))
+        if key in self.pos:
+            old_value = self.d[key]
+            self.d[key] = value
+            if value > old_value:
+                self._sift_up(self.pos[key])
+            elif value < old_value:
+                self._sift_down(self.pos[key])
+        else:
+            self.d[key] = value
+            self.heap.append(key)
+            self.pos[key] = len(self.heap) - 1
+            self._sift_up(len(self.heap) - 1)
 
     def delete(self, key):
-        self.d.pop(key, None)
+        if key not in self.pos:
+            return
+        i = self.pos.pop(key)
+        del self.d[key]
+        last = self.heap.pop()
+        if i < len(self.heap):
+            self.heap[i] = last
+            self.pos[last] = i
+            self._sift_up(i)
+            self._sift_down(self.pos[last])
 
     def get(self, key):
         return self.d[key]
 
     def get_max_key(self):
-        while self.heap:
-            neg_value, rev = self.heap[0]
-            key = rev.key
-            if self.d.get(key) == -neg_value:
-                return key
-            heapq.heappop(self.heap)
-        return None
+        return self.heap[0] if self.heap else None
 
 def get_pretoken_count(text, special_tokens):
     split_pat = "|".join(re.escape(tok) for tok in special_tokens)
@@ -64,11 +99,12 @@ def get_pretoken_count(text, special_tokens):
     return pretoken_count_map
 
 def get_pretoken_count_wrapper(start, end, filename, special_tokens):
+    t0 = time.perf_counter()
     with open(filename, "rb") as f:
         f.seek(start)
         chunk = f.read(end - start).decode("utf-8", errors="ignore")
     resp = get_pretoken_count(chunk, special_tokens)
-    return resp
+    return resp, time.perf_counter() - t0, os.getpid()
 
 def aggregate_pretoken_count(l):
     total_pretoken_count = {}
@@ -238,6 +274,8 @@ def execute_bpe_train(input_path, vocab_size, special_tokens, num_processes=None
     if num_chunks is None:
         num_chunks = num_processes * 4
 
+    total_start = time.perf_counter()
+
     with open(input_path, "rb") as f:
         boundaries = find_chunk_boundaries(f, num_chunks, b"<|endoftext|>")
 
@@ -246,7 +284,16 @@ def execute_bpe_train(input_path, vocab_size, special_tokens, num_processes=None
     with Pool(num_processes) as pool:
         results = pool.starmap(get_pretoken_count_wrapper, args)
 
-    final_pretoken_count_map = aggregate_pretoken_count(results)
+    # for chunk_index, ((s, e, _, _), (_, elapsed, pid)) in enumerate(zip(args, results)):
+    #     print(f"[pretoken] chunk {chunk_index} (pid {pid}, {(e - s) / 1e6:.2f} MB): {elapsed:.2f}s")
+
+    final_pretoken_count_map = aggregate_pretoken_count(r[0] for r in results)
+    pretoken_end = time.perf_counter()
+    # print(f"[pretoken] finished in {pretoken_end - total_start:.2f}s ({len(final_pretoken_count_map)} unique pretokens)")
+
     vocab, merges = bpe_logic(final_pretoken_count_map, vocab_size, special_tokens)
+    total_end = time.perf_counter()
+    # print(f"[merge] finished in {total_end - pretoken_end:.2f}s")
+    # print(f"[total] finished in {total_end - total_start:.2f}s")
 
     return vocab, merges
