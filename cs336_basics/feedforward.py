@@ -1,6 +1,6 @@
-import torch
 import torch.nn as nn
 from cs336_basics.linear import Linear
+from cs336_basics.silu import silu
 
 class FeedForward(nn.Module):
     def __init__(self, d_model, d_ff, device=None, dtype=None):
@@ -10,5 +10,4 @@ class FeedForward(nn.Module):
         self.w3_weight = Linear(d_model, d_ff, device, dtype)
 
     def forward(self, x):
-        w1x = self.w1_weight(x)
-        return self.w2_weight( torch.sigmoid(w1x) * w1x * self.w3_weight(x))
+        return self.w2_weight( silu(self.w1_weight(x)) * self.w3_weight(x))
