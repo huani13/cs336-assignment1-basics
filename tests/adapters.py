@@ -171,9 +171,7 @@ def run_multihead_self_attention(
     mha = MultiHeadAttention(d_model, num_heads)
     mha.load_state_dict(
         {
-            "queries.weight": q_proj_weight,
-            "keys.weight": k_proj_weight,
-            "values.weight": v_proj_weight,
+            "qkv.weight": torch.cat([q_proj_weight, k_proj_weight, v_proj_weight], dim=0),
             "proj.weight": o_proj_weight,
         }
     )
@@ -221,9 +219,7 @@ def run_multihead_self_attention_with_rope(
     mha = MultiHeadAttention(d_model, num_heads, rope)
     mha.load_state_dict(
         {
-            "queries.weight": q_proj_weight,
-            "keys.weight": k_proj_weight,
-            "values.weight": v_proj_weight,
+            "qkv.weight": torch.cat([q_proj_weight, k_proj_weight, v_proj_weight], dim=0),
             "proj.weight": o_proj_weight,
         }
     )
@@ -327,9 +323,7 @@ def run_transformer_block(
     transformer_block = TransformerBlock(d_model, num_heads, d_ff, rope)
     transformer_block.load_state_dict(
         {
-            "multi_head_attention.queries.weight": weights["attn.q_proj.weight"],
-            "multi_head_attention.keys.weight": weights["attn.k_proj.weight"],
-            "multi_head_attention.values.weight": weights["attn.v_proj.weight"],
+            "multi_head_attention.qkv.weight": torch.cat([weights["attn.q_proj.weight"], weights["attn.k_proj.weight"], weights["attn.v_proj.weight"]], dim=0),
             "multi_head_attention.proj.weight": weights["attn.output_proj.weight"],
             "feedforward.w1_weight.weight": weights["ffn.w1.weight"],
             "feedforward.w2_weight.weight": weights["ffn.w2.weight"],
@@ -427,9 +421,7 @@ def run_transformer_lm(
         "output.weight": weights["lm_head.weight"]
     }
     for layer in range(num_layers):
-        weight_dict[f"transformer_blocks.{layer}.multi_head_attention.queries.weight"] = weights[f"layers.{layer}.attn.q_proj.weight"]
-        weight_dict[f"transformer_blocks.{layer}.multi_head_attention.keys.weight"] = weights[f"layers.{layer}.attn.k_proj.weight"]
-        weight_dict[f"transformer_blocks.{layer}.multi_head_attention.values.weight"] = weights[f"layers.{layer}.attn.v_proj.weight"]
+        weight_dict[f"transformer_blocks.{layer}.multi_head_attention.qkv.weight"] = torch.cat([weights[f"layers.{layer}.attn.q_proj.weight"], weights[f"layers.{layer}.attn.k_proj.weight"], weights[f"layers.{layer}.attn.v_proj.weight"]])
         weight_dict[f"transformer_blocks.{layer}.multi_head_attention.proj.weight"] = weights[f"layers.{layer}.attn.output_proj.weight"]
         weight_dict[f"transformer_blocks.{layer}.feedforward.w1_weight.weight"] = weights[f"layers.{layer}.ffn.w1.weight"]
         weight_dict[f"transformer_blocks.{layer}.feedforward.w2_weight.weight"] = weights[f"layers.{layer}.ffn.w2.weight"]
