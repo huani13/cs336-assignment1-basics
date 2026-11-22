@@ -1,11 +1,13 @@
 import torch
-from einops import rearrange
+import numpy as np
 
 def load_data(arr, batch_size, context_length, device):
-    n = arr.size
-    y = torch.randint(0, n-context_length, (batch_size,))
-    y = rearrange(y, "b -> b 1")
-    offsets = torch.arange(context_length)
-    inputs_index = y + offsets
-    targets_index = inputs_index + 1
-    return torch.tensor(arr[inputs_index].astype("int64")), torch.tensor(arr[targets_index].astype("int64"))
+
+    starts = np.random.randint(0, len(arr) - context_length, size=batch_size)
+    idx = starts[:, None] + np.arange(context_length+1)
+    window = torch.from_numpy(arr[idx].astype(np.int64))
+    if torch.device(device).type == "cuda":
+        window = window.pin_memory().to(device, non_blocking=True)
+    else:
+        window = window.to(device)
+    return window[:, :-1], window[:, 1:]
