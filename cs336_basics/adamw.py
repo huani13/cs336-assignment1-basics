@@ -8,8 +8,12 @@ class AdamW(torch.optim.Optimizer):
         defaults = {"lr": lr, "betas":betas, "weight_decay": weight_decay, "eps":eps}
         super().__init__(params, defaults)
 
+    @torch.no_grad()
     def step(self, closure: Optional[Callable] = None):
-        loss = None if closure is None else closure()
+        loss = None
+        if closure is not None:
+            with torch.enable_grad():
+                loss = closure()
         for group in self.param_groups:
             lr = group["lr"]
             b1, b2 = group["betas"]
@@ -19,17 +23,16 @@ class AdamW(torch.optim.Optimizer):
                 if p.grad is None:
                     continue
                 state = self.state[p]
-                t = state.get("t", 1)
                 grad = p.grad.data
-                at = lr * (1-b2**t)**0.5 / (1-b1**t)
-                p.data *= (1-lr*weight_decay)
-                m = state.get("m", 0)
-                m = b1*m + (1-b1)*grad
-                v = state.get("v", 0)
-                v = b2*v + (1-b2)*grad**2
-                p.data -= at*m / (v**0.5 + eps)
-                state["m"] = m
-                state["v"] = v
-                state["t"] = t+1
-
+                if not state:
+                    state["t"] = 0
+                    state["m"] = torch.zeros_like(p, memory_format=torch.preserve_format)
+                    state["v"] = torch.zeros_like(p, memory_format=torch.preserve_format)
+                state["t"] += 1
+                t, m, v = state["t"], state["m"], state["v"]
+                m.lerp_(grad, 1-b1)
+                v.mul_(b2).addcmul_(grad, grad, value=1-b2)
+                step_size = lr * math.sqrt(1-b2**t) / (1-b1**t)
+                p.mul_(1-lr*weight_decay)
+                p.addcdiv_(m, v.sqrt().add_(eps), value=-step_size)
         return loss
