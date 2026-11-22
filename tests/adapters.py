@@ -108,9 +108,8 @@ def run_swiglu(
     feedforward = FeedForward(d_model, d_ff)
     feedforward.load_state_dict(
         {
-            "w1_weight.weight": w1_weight,
+            "w13_weight.weight": torch.cat([w1_weight, w3_weight]),
             "w2_weight.weight": w2_weight,
-            "w3_weight.weight": w3_weight,
         }
     )
     return feedforward(in_features)
@@ -325,9 +324,8 @@ def run_transformer_block(
         {
             "multi_head_attention.qkv.weight": torch.cat([weights["attn.q_proj.weight"], weights["attn.k_proj.weight"], weights["attn.v_proj.weight"]], dim=0),
             "multi_head_attention.proj.weight": weights["attn.output_proj.weight"],
-            "feedforward.w1_weight.weight": weights["ffn.w1.weight"],
+            "feedforward.w13_weight.weight": torch.cat([weights["ffn.w1.weight"], weights["ffn.w3.weight"]]),
             "feedforward.w2_weight.weight": weights["ffn.w2.weight"],
-            "feedforward.w3_weight.weight": weights["ffn.w3.weight"],
             "rms_norm_1.weight": weights["ln1.weight"],
             "rms_norm_2.weight": weights["ln2.weight"],
         }
@@ -423,9 +421,8 @@ def run_transformer_lm(
     for layer in range(num_layers):
         weight_dict[f"transformer_blocks.{layer}.multi_head_attention.qkv.weight"] = torch.cat([weights[f"layers.{layer}.attn.q_proj.weight"], weights[f"layers.{layer}.attn.k_proj.weight"], weights[f"layers.{layer}.attn.v_proj.weight"]])
         weight_dict[f"transformer_blocks.{layer}.multi_head_attention.proj.weight"] = weights[f"layers.{layer}.attn.output_proj.weight"]
-        weight_dict[f"transformer_blocks.{layer}.feedforward.w1_weight.weight"] = weights[f"layers.{layer}.ffn.w1.weight"]
+        weight_dict[f"transformer_blocks.{layer}.feedforward.w13_weight.weight"] = torch.cat([weights[f"layers.{layer}.ffn.w1.weight"], weights[f"layers.{layer}.ffn.w3.weight"]])
         weight_dict[f"transformer_blocks.{layer}.feedforward.w2_weight.weight"] = weights[f"layers.{layer}.ffn.w2.weight"]
-        weight_dict[f"transformer_blocks.{layer}.feedforward.w3_weight.weight"] = weights[f"layers.{layer}.ffn.w3.weight"]
         weight_dict[f"transformer_blocks.{layer}.rms_norm_1.weight"] = weights[f"layers.{layer}.ln1.weight"]
         weight_dict[f"transformer_blocks.{layer}.rms_norm_2.weight"] = weights[f"layers.{layer}.ln2.weight"]
     transformer_lm.load_state_dict(weight_dict)
