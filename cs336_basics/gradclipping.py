@@ -1,18 +1,11 @@
+import torch
+
+@torch.no_grad()
 def gradient_clipping(parameters, max_l2_norm, eps=1e-6):
-    param_local = []
-    for param in parameters:
-        param_local.append(param)
-    l2_norm = 0
-    for param in param_local:
-        if not param.requires_grad:
-            continue
-        grad = param.grad
-        l2_norm += (grad**2).sum()
-    l2_norm = l2_norm**0.5
-    if l2_norm <= max_l2_norm:
+    grads = [p.grad for p in parameters if p.grad is not None]
+    if not grads:
         return
-    multiplier = max_l2_norm / (l2_norm + eps)
-    for param in param_local:
-        if not param.requires_grad:
-            continue
-        param.grad *= multiplier
+    norms = torch._foreach_norm(grads)
+    total_norm = torch.linalg.vector_norm(torch.stack([n.float() for n in norms]))
+    clip_coef = (max_l2_norm / (total_norm + eps)).clamp(max=1.0)
+    torch._foreach_mul_(grads, clip_coef)
